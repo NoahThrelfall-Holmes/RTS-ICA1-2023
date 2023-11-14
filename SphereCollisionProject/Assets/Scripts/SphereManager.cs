@@ -1,66 +1,99 @@
-﻿using System.Collections;
+﻿using UnityEngine;
 using System.Collections.Generic;
-using System.Security.Cryptography;
-using UnityEngine;
 
 public class SphereManager : MonoBehaviour
 {
-    //get spheres
     public List<CustomSphere> spheres;
+    public List<CustomPlane> planes;
 
-    // assuming only 2 spheres for now
     void FixedUpdate()
     {
-        
-        for (int i = 0; i < spheres.Count - 1; i++)
+        foreach (var sphere in spheres)
         {
-            print("Hello?");
+            sphere.Move();
+        }
+
+        for (int i = 0; i < spheres.Count; i++)
+        {
             for (int j = i + 1; j < spheres.Count; j++)
             {
-                // A = get vector between the 2 points
-                Vector3 A = spheres[j].transform.position - spheres[i].transform.position;
+                var sphere1 = spheres[i];
+                var sphere2 = spheres[j];
 
-                // V = velocity vector for sphere 1
-                Vector3 V = spheres[i].velocity;
+                // Relative velocity
+                Vector3 relativeVelocity = sphere1.velocity - sphere2.velocity;
+                // Relative position
+                Vector3 relativePosition = sphere1.transform.position - sphere2.transform.position;
 
-                // d = the distance between the centres of the two spheres at closest approach along path V
-                // Calculate the projection of A onto V
-                float projection = Vector3.Dot(A, V) / V.magnitude;
+                // Coefficients for the quadratic equation
+                float a = Vector3.Dot(relativeVelocity, relativeVelocity);
+                float b = 2 * Vector3.Dot(relativeVelocity, relativePosition);
+                float c = Vector3.Dot(relativePosition, relativePosition) - (sphere1.GetRadius() + sphere2.GetRadius()) * (sphere1.GetRadius() + sphere2.GetRadius());
 
-                // Calculate the distance of the new line of the triangle formed by A and V
-                float d = Mathf.Sqrt(A.sqrMagnitude - projection * projection);
+                // Calculate the discriminant
+                float discriminant = b * b - 4 * a * c;
 
-                // DEBUG
-                // Calculate the position where d meets V
-                Vector3 meetingPosition = spheres[i].transform.position + (projection * V.normalized);
-                Debug.DrawLine(spheres[j].transform.position, meetingPosition, Color.blue);
-
-                //Debug.DrawRay(spheres[i].transform.position, V, Color.blue);
-
-                float r1r2 = spheres[i].GetRadius() + spheres[j].GetRadius();
-                if (r1r2 > d)
+                // Check if there are real solutions
+                if (discriminant >= 0)
                 {
-                    float q = Vector3.Angle(A, V);
-                    float cosTheta = Mathf.Cos(r1r2 / d);
+                    // Compute the two solutions of t
+                    float t1 = (-b - Mathf.Sqrt(discriminant)) / (2 * a);
+                    float t2 = (-b + Mathf.Sqrt(discriminant)) / (2 * a);
 
-                    // a2 = b2 + c2 − 2bc cosA
-                    float eSquared = d * d + r1r2 * r1r2 - 2 * d * r1r2 * Mathf.Cos(cosTheta);
-                    float e = Mathf.Sqrt(eSquared);
+                    // Check if the collisions occur within the frame
+                    if ((t1 >= 0 && t1 <= 1) || (t2 >= 0 && t2 <= 1))
+                    {
+                        float tCollision = Mathf.Min(t1, t2);
+                        if (tCollision >= 0 && tCollision <= 1)
+                        {
+                            // Check if the collision is within this physics update
+                            if (tCollision <= Time.fixedDeltaTime)
+                            {
+                                // Move spheres to the point just before collision
+                                sphere1.transform.position += sphere1.velocity * tCollision;
+                                sphere2.transform.position += sphere2.velocity * tCollision;
 
-                    float distanceAlongV = projection - Mathf.Sqrt(spheres[i].GetRadius() * spheres[i].GetRadius() - e * e);
+                                // Resolve the collision
+                                sphere1.ResolveCollision(sphere2, tCollision);
+                                //sphere2.ResolveCollision(sphere1, tCollision);
 
-
-                    // DEBUG
-                    //Debug.DrawLine(spheres[i].transform.position, meetingPosition, Color.red);
-                    Debug.DrawLine(spheres[i].transform.position, spheres[j].transform.position, Color.green);
-                    Vector3 vectorEndPosition = spheres[i].transform.position + V.normalized * distanceAlongV;
-                    // Draw a vector from meeting position to vectorEndPosition for the length of 'e'
-                    Debug.DrawLine(meetingPosition, vectorEndPosition, Color.yellow);
+                                // Log the collision time
+                                Debug.Log("Collision at t=" + tCollision);
+                            }
+                        }
+                    }
                 }
-                print("No Collision");
+            }
+        }
 
+        for (int i = 0; i < spheres.Count; i++)
+        {
+            for (int j = 0; j < planes.Count; j++)
+            {
+                Vector3 planeNormal = -planes[j].transform.up;
+                Vector3 pointOnPlane = planes[j].transform.position; // Assuming this is 'k'
+                Vector3 spherePosition = spheres[i].transform.position;
+                Vector3 P = spherePosition - pointOnPlane;
+
+                // Check if sphere is moving towards the plane
+                if (Vector3.Dot(spheres[i].velocity, planeNormal) > 0)
+                {
+                    float d = Vector3.Dot(P, planeNormal) - spheres[i].GetRadius();
+                    if (d <= 0)
+                    {
+                        // Calculate time of collision
+                        float numerator = Vector3.Dot(-P, planeNormal) - spheres[i].GetRadius();
+                        float denominator = Vector3.Dot(spheres[i].velocity, planeNormal);
+                        float tCollision = numerator / denominator;
+
+                        if (tCollision >= 0 && tCollision <= Time.fixedDeltaTime)
+                        {
+                            spheres[i].transform.position += spheres[i].velocity * tCollision;
+                            spheres[i].ResolvePlaneCollision(planeNormal, d, tCollision);
+                        }
+                    }
+                }
             }
         }
     }
-
 }
