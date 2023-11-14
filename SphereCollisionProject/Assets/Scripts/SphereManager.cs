@@ -26,8 +26,11 @@ public class SphereManager : MonoBehaviour
                 Vector3 relativePosition = sphere1.transform.position - sphere2.transform.position;
 
                 // Coefficients for the quadratic equation
+                // a = captures the rate at which the distance between the two spheres is changing. e.g. If a is zero, it means the spheres are moving parallel to each other
                 float a = Vector3.Dot(relativeVelocity, relativeVelocity);
+                // b = essentially linking the rate at which the spheres are moving towards or away from each other with their current separation.
                 float b = 2 * Vector3.Dot(relativeVelocity, relativePosition);
+                // c = represents the initial squared distance between the spheres minus the squared sum of their radii. It gives a sense of how close the spheres are to touching each other at the start of the time frame.
                 float c = Vector3.Dot(relativePosition, relativePosition) - (sphere1.GetRadius() + sphere2.GetRadius()) * (sphere1.GetRadius() + sphere2.GetRadius());
 
                 // Calculate the discriminant
